@@ -37,14 +37,14 @@
   (:import [java.lang Long]
            [com.google.ortools Loader]
            [com.google.ortools.sat CpModel
-                                   CpSolver
-                                   CpSolverSolutionCallback
-                                   IntVar
-                                   BoolVar
-                                   Literal
-                                   LinearExpr
-                                   SatParameters$SearchBranching
-                                   LinearArgument CpSolverStatus]
+            CpSolver
+            CpSolverSolutionCallback
+            IntVar
+            BoolVar
+            Literal
+            LinearExpr
+            SatParameters$SearchBranching
+            LinearArgument CpSolverStatus]
            [com.google.ortools.util Domain]))
 
 (defonce load-native (delay (Loader/loadNativeLibraries)))
@@ -117,21 +117,21 @@
     :or   {name-value true}
     :as   options}]
   (proxy
-    [CpSolverSolutionCallback]
-    []
+   [CpSolverSolutionCallback]
+   []
     (onSolutionCallback []
       (swap! state-ref update :solutions conj
              {:objective    (.objectiveValue this)
               :wall-time    (.wallTime this)
               :current-time (qutil/utc-now)
               :values       (walk/prewalk
-                              (fn [v] (cond (and (lvar? v) name-value)
-                                            [(.getName v) (.value this v)]
-                                            (lvar? v)
-                                            (.value this v)
-                                            :else
-                                            v))
-                              int-vars)}))))
+                             (fn [v] (cond (and (lvar? v) name-value)
+                                           [(.getName v) (.value this v)]
+                                           (lvar? v)
+                                           (.value this v)
+                                           :else
+                                           v))
+                             int-vars)}))))
 
 (defrecord SolverWrapper [solver callback solved-state value-fn])
 
@@ -151,7 +151,7 @@
                      ;(.setLogSearchProgress true)
 
                      (cond->
-                       timeout
+                      timeout
                        (.setMaxTimeInSeconds timeout)
 
                        ;; EnumerateAllSolutions is NOT supported with parallel
@@ -165,8 +165,7 @@
 
                        ;; Default is 0 (use all cores). not compatible with EnumerateAllSolutions.
                        num-workers
-                       (.setNumWorkers num-workers)
-                       )))
+                       (.setNumWorkers num-workers))))
         solved-state (atom {})
         cb (mk-solutions-callback solved-state vars options)]
     (->SolverWrapper solver cb solved-state #(.value solver %))))
@@ -218,44 +217,44 @@
   ;  that is human-readable and writeable and also machine-readable.
   (let [s (string/join "\n" args)
         ret (insta/transform
-              {:NUMBER #(Integer/parseInt %)
-               :EQ     (fn [l eop r]
+             {:NUMBER #(Integer/parseInt %)
+              :EQ     (fn [l eop r]
                          ; Return lists to make the output form more readble
-                         [eop (apply list l) (apply list r)])
-               :PLUS   (constantly :PLUS)
-               :MINUS  (constantly :MINUS)
-               :EXPR   (fn [& args]
-                         (first
-                           (reduce (fn [[acc minus?] term]
-                                     (cond (= term :PLUS)
-                                           [acc false]
-                                           (= term :MINUS)
-                                           [acc true]
-                                           minus?
-                                           [(conj acc (apply negative-term term)) false]
-                                           :else
-                                           [(conj acc term) false]))
-                                   [[] false]
-                                   args)))
-               :TERM   (fn
-                         ([t1]
-                          [t1])
-                         ([t1 t2]
-                          (cond
-                            (= t1 :MINUS)
-                            [-1 t2]
-                            :else
-                            [t1 t2]))
-                         ([t1 t2 t3]
-                          (cond
-                            (= t1 :MINUS)
-                            [-1 t2 t3]
-                            (number? t1)
-                            [t1 t2 t3]
-                            :else
-                            (throw (ex-info "Parse failure, For a term triple, the first element must be a number"
-                                            {:t1 t1 :t2 t2 :t3 t3})))))}
-              (the-parser s))]
+                        [eop (apply list l) (apply list r)])
+              :PLUS   (constantly :PLUS)
+              :MINUS  (constantly :MINUS)
+              :EXPR   (fn [& args]
+                        (first
+                         (reduce (fn [[acc minus?] term]
+                                   (cond (= term :PLUS)
+                                         [acc false]
+                                         (= term :MINUS)
+                                         [acc true]
+                                         minus?
+                                         [(conj acc (apply negative-term term)) false]
+                                         :else
+                                         [(conj acc term) false]))
+                                 [[] false]
+                                 args)))
+              :TERM   (fn
+                        ([t1]
+                         [t1])
+                        ([t1 t2]
+                         (cond
+                           (= t1 :MINUS)
+                           [-1 t2]
+                           :else
+                           [t1 t2]))
+                        ([t1 t2 t3]
+                         (cond
+                           (= t1 :MINUS)
+                           [-1 t2 t3]
+                           (number? t1)
+                           [t1 t2 t3]
+                           :else
+                           (throw (ex-info "Parse failure, For a term triple, the first element must be a number"
+                                           {:t1 t1 :t2 t2 :t3 t3})))))}
+             (the-parser s))]
     (if (insta/failure? ret)
       (throw (ex-info "Parse failed" {:string s :failure ret}))
       ret)))
@@ -270,84 +269,82 @@
   In the `:range` case, the second value is inclusive."
   [model m]
   (let [kvs (doall
-              (mapcat
-                (fn [[varname-or-names domain-spec]]
-                  (error/wrap-ex-info-context
-                    {:varname varname-or-names :domain-spec domain-spec}
+             (mapcat
+              (fn [[varname-or-names domain-spec]]
+                (error/wrap-ex-info-context
+                 {:varname varname-or-names :domain-spec domain-spec}
 
-                    (if (and (sequential? domain-spec) (= (first domain-spec) :tuples))
+                 (if (and (sequential? domain-spec) (= (first domain-spec) :tuples))
 
                       ;; addAllowedAssignments
                       ;; See https://developers.google.com/optimization/assignment/assignment_groups
-                      (let [[_ tuples] domain-spec]
-                        (when-not (and (sequential? varname-or-names) (sequential? tuples))
-                          (throw (ex-info "For domain `:tuples` varname-or-names must be a seq of string and domain spec must have a seq of Ints"
-                                          {:tuples tuples :varnames varname-or-names})))
-                        (when (some #(not= (count varname-or-names) (count %))
-                                    tuples)
-                          (throw (ex-info "length of varnames must match length of each tuple" {})))
-                        (let [kvs2 (doall (map-indexed
-                                            (fn [i varname2]
-                                              [varname2 (.newIntVarFromDomain model
-                                                                              (apply domain (mapv #(nth % i) tuples))
-                                                                              varname2)])
-                                            varname-or-names))
-                              tbl-constraint (.addAllowedAssignments model (mapv second kvs2))]
+                   (let [[_ tuples] domain-spec]
+                     (when-not (and (sequential? varname-or-names) (sequential? tuples))
+                       (throw (ex-info "For domain `:tuples` varname-or-names must be a seq of string and domain spec must have a seq of Ints"
+                                       {:tuples tuples :varnames varname-or-names})))
+                     (when (some #(not= (count varname-or-names) (count %))
+                                 tuples)
+                       (throw (ex-info "length of varnames must match length of each tuple" {})))
+                     (let [kvs2 (doall (map-indexed
+                                        (fn [i varname2]
+                                          [varname2 (.newIntVarFromDomain model
+                                                                          (apply domain (mapv #(nth % i) tuples))
+                                                                          varname2)])
+                                        varname-or-names))
+                           tbl-constraint (.addAllowedAssignments model (mapv second kvs2))]
                           ;// Define the allowed groups of workers
                           ;model.addAllowedAssignments(new IntVar[] {work[0], work[1], work[2], work[3]})
                           ;.addTuples(group1);
-                          (doseq [t tuples]
-                            (.addTuple tbl-constraint (int-array t)))
-                          kvs2))
+                       (doseq [t tuples]
+                         (.addTuple tbl-constraint (int-array t)))
+                       kvs2))
 
                       ;; other
-                      [[varname-or-names
-                        (cond (= domain-spec [:boolean])
-                              (.newBoolVar model varname-or-names)
+                   [[varname-or-names
+                     (cond (= domain-spec [:boolean])
+                           (.newBoolVar model varname-or-names)
 
-                              (= (first domain-spec) :range)
-                              (.newIntVar model (nth domain-spec 1) (nth domain-spec 2) varname-or-names)
+                           (= (first domain-spec) :range)
+                           (.newIntVar model (nth domain-spec 1) (nth domain-spec 2) varname-or-names)
 
-                              (= (first domain-spec) :fixed-size-interval)
-                              (fn [processed-domain-map]
-                                (let [interval-start-varname (nth domain-spec 1)
-                                      intv-start (get processed-domain-map interval-start-varname)
-                                      n (nth domain-spec 2)]
-                                  (when-not (instance? LinearArgument intv-start)
-                                    (throw (ex-info "A LinearArgument is required" {:type (type intv-start)
-                                                                                    :x    (str intv-start)})))
-                                  (when-not (int? n)
-                                    (throw (ex-info "Second spec arg must be a n int" {:type (type n)
-                                                                                       :n    (str n)})))
-                                  (.newFixedSizeIntervalVar model intv-start (long n) varname-or-names)))
+                           (= (first domain-spec) :fixed-size-interval)
+                           (fn [processed-domain-map]
+                             (let [interval-start-varname (nth domain-spec 1)
+                                   intv-start (get processed-domain-map interval-start-varname)
+                                   n (nth domain-spec 2)]
+                               (when-not (instance? LinearArgument intv-start)
+                                 (throw (ex-info "A LinearArgument is required" {:type (type intv-start)
+                                                                                 :x    (str intv-start)})))
+                               (when-not (int? n)
+                                 (throw (ex-info "Second spec arg must be a n int" {:type (type n)
+                                                                                    :n    (str n)})))
+                               (.newFixedSizeIntervalVar model intv-start (long n) varname-or-names)))
 
-                              (= (first domain-spec) :optional-fixed-size-interval)
-                              (fn [processed-domain-map]
+                           (= (first domain-spec) :optional-fixed-size-interval)
+                           (fn [processed-domain-map]
                                 ;; [:optional-fixed-size-interval varStart varIsPresent intSize]
-                                (let [interval-start-varname (nth domain-spec 1)
-                                      intv-start (get processed-domain-map interval-start-varname)
+                             (let [interval-start-varname (nth domain-spec 1)
+                                   intv-start (get processed-domain-map interval-start-varname)
 
-                                      is-present-varname (nth domain-spec 2)
-                                      is-present (get processed-domain-map is-present-varname)
+                                   is-present-varname (nth domain-spec 2)
+                                   is-present (get processed-domain-map is-present-varname)
 
-                                      size (nth domain-spec 3)]
-                                  (when-not (instance? LinearArgument intv-start)
-                                    (throw (ex-info "A LinearArgument is required" {:type (type intv-start)
-                                                                                    :x    (str intv-start)})))
-                                  (when-not (int? size)
-                                    (throw (ex-info "Second spec arg must be a size int" {:type (type size)
-                                                                                          :n    (str size)})))
-                                  (.newOptionalFixedSizeIntervalVar model intv-start (long size) is-present varname-or-names)))
+                                   size (nth domain-spec 3)]
+                               (when-not (instance? LinearArgument intv-start)
+                                 (throw (ex-info "A LinearArgument is required" {:type (type intv-start)
+                                                                                 :x    (str intv-start)})))
+                               (when-not (int? size)
+                                 (throw (ex-info "Second spec arg must be a size int" {:type (type size)
+                                                                                       :n    (str size)})))
+                               (.newOptionalFixedSizeIntervalVar model intv-start (long size) is-present varname-or-names)))
 
-                              (= (count domain-spec) 1)
-                              (.newConstant model (first domain-spec))
+                           (= (count domain-spec) 1)
+                           (.newConstant model (first domain-spec))
 
-                              :else
-                              (.newIntVarFromDomain model (apply domain domain-spec) varname-or-names)
-                              )
+                           :else
+                           (.newIntVarFromDomain model (apply domain domain-spec) varname-or-names))]])))
 
-                        ]])))
-                m))
+              m))
         m2 (into (empty m) kvs)]
     (sp/transform [(sp/walker fn?)] #(% m2) m2)))
 
@@ -368,8 +365,8 @@
     (.newIntVar model t-min t-max varname)))
 
 (s/fdef eval-in-domain
-        :args (s/cat :domain-map ::domain-map :key any?)
-        :ret lvar?)
+  :args (s/cat :domain-map ::domain-map :key any?)
+  :ret lvar?)
 (defn eval-in-domain
   [domain-map key]
   (cond
@@ -377,8 +374,8 @@
                    (or (get domain-map k)
                        (throw (ex-info (format "No var found in domain for \"%s\" " k)
                                        (cond-> {:key k}
-                                               (>= (count k) 5)
-                                               (assoc :suggestions (filter #(.contains % k) (keys domain-map))))))))
+                                         (>= (count k) 5)
+                                         (assoc :suggestions (filter #(.contains % k) (keys domain-map))))))))
     (nil? key) (throw (ex-info "eval-in-domain with a nil key" {}))
     (number? key) (long key)))
 
@@ -402,8 +399,8 @@
   (long (first polynomial)))
 
 (s/fdef linear-arg-or-long
-        :args (s/cat :model ::model :domain-map ::domain-map-light :polynomial (s/and sequential? seq))
-        :ret ::linear-arg)
+  :args (s/cat :model ::model :domain-map ::domain-map-light :polynomial (s/and sequential? seq))
+  :ret ::linear-arg)
 ;(defn- linear-arg-or-long
 ;  "Return a LinearArgument.  Numeric terms are wrapped in a LinearExpression, so
 ;  you can use `[2]` as an arg where the signature expects a LinearArgument."
@@ -512,48 +509,48 @@
                                                                  {:factor factor :term term :type (type factor)}))))
                                    term)]]
       (error/wrap-context-for-error-and-logging
-        {:polynomial polynomial :term term :term-types term-types}
+       {:polynomial polynomial :term term :term-types term-types}
 
         ;; We don't use `LinearExpr/sum` because it's implementation is just a loop that adds each
         ;; term one at a time to the expression (it's more straightforward to just do that ourselves)
 
-        (case (take 3 term-types)
+       (case (take 3 term-types)
 
-          []
-          (timbre/warn "Empty term in polynomial" {})
+         []
+         (timbre/warn "Empty term in polynomial" {})
 
-          [:num]
-          (.add expr (.newConstant model t1))
+         [:num]
+         (.add expr (.newConstant model t1))
 
-          [:str]
-          (.add expr (eval-in-domain domain-map t1))
+         [:str]
+         (.add expr (eval-in-domain domain-map t1))
 
-          [:num :str]
-          (.addTerm expr (eval-in-domain domain-map t2) (long t1))
+         [:num :str]
+         (.addTerm expr (eval-in-domain domain-map t2) (long t1))
 
-          [:str :num]                                       ;; DEPRECATE - use impl/simplify-polynomial to normalize
-          (.addTerm expr (eval-in-domain domain-map t1) (long t2))
+         [:str :num]                                       ;; DEPRECATE - use impl/simplify-polynomial to normalize
+         (.addTerm expr (eval-in-domain domain-map t1) (long t2))
 
-          [:str :str]
-          (let [tmp (new-int-var-domain-from-mult
-                      model (eval-in-domain domain-map t1) (eval-in-domain domain-map t2))]
-            (.addMultiplicationEquality
-              model tmp (eval-in-domain domain-map t1) (eval-in-domain domain-map t2))
-            (.add expr tmp))
-
-          ;; 3 or more terms...
-          [:num :str :str]
-          (let [_ (validate-rest-strings! term)
-                tmp (add-multiplication-factors! model domain-map (rest term))]
-            (.addTerm expr tmp t1))
+         [:str :str]
+         (let [tmp (new-int-var-domain-from-mult
+                    model (eval-in-domain domain-map t1) (eval-in-domain domain-map t2))]
+           (.addMultiplicationEquality
+            model tmp (eval-in-domain domain-map t1) (eval-in-domain domain-map t2))
+           (.add expr tmp))
 
           ;; 3 or more terms...
-          [:str :str :str]
-          (let [_ (validate-rest-strings! term)
-                tmp (add-multiplication-factors! model domain-map (rest term))]
-            (.add expr tmp))
+         [:num :str :str]
+         (let [_ (validate-rest-strings! term)
+               tmp (add-multiplication-factors! model domain-map (rest term))]
+           (.addTerm expr tmp t1))
 
-          (throw (ex-info "Invalid term in linear-arg-or-long. See s.q.impl/simplify-polynomial." {})))))
+          ;; 3 or more terms...
+         [:str :str :str]
+         (let [_ (validate-rest-strings! term)
+               tmp (add-multiplication-factors! model domain-map (rest term))]
+           (.add expr tmp))
+
+         (throw (ex-info "Invalid term in linear-arg-or-long. See s.q.impl/simplify-polynomial." {})))))
 
     expr))
 
@@ -568,7 +565,7 @@
   (eval-in-domain domain-map arg))
 
 (s/fdef literal-arg
-        :args (s/cat :domain-map ::domain-map-light :arg any?))
+  :args (s/cat :domain-map ::domain-map-light :arg any?))
 (defn- literal-arg
   [domain-map arg]
   (let [[t1] (if (sequential? arg)
@@ -582,7 +579,7 @@
           ^Literal (eval-in-domain domain-map t1))))
 
 (s/fdef !
-        :args (s/cat :s (s/and string? seq)))
+  :args (s/cat :s (s/and string? seq)))
 (defn !
   "Given a string variable, return the negated equivalent"
   [s]
@@ -603,7 +600,7 @@
           sequence))
 
 (defmulti apply-modifier
-          (fn [domain-map constraint modifier] (first modifier)))
+  (fn [domain-map constraint modifier] (first modifier)))
 
 (defmethod apply-modifier :only-if
   [domain-map constraint [_ q1]]
@@ -706,33 +703,32 @@
                                            (.addAbsEquality model (linarg target) (linarg right)))
                  "add-modulo-equality"   (fn [target var mod]
                                            (.addModuloEquality
-                                             model
-                                             (linarg target) (linarg var) (linarg mod)))
+                                            model
+                                            (linarg target) (linarg var) (linarg mod)))
                  ;; WARNING: Don't use `add-division-equality` with `:only-if`. It will never find solutions or
                  ;;   report CP-Sat model is invalid. only-if works for "linear" and basic logic constraints.
                  ;;   add-division-equality is non-linear.
                  "add-division-equality" (fn [target num denom]
                                            (.addDivisionEquality ; "rounded toward 0"
-                                             model
-                                             (linarg target) (linarg num) (linarg denom)))
+                                            model
+                                            (linarg target) (linarg num) (linarg denom)))
 
                  "no-overlap-2d"         (fn [rectangles]
                                            (let [c (.addNoOverlap2D model)]
                                              (doseq [[x-interval y-interval] rectangles]
                                                (.addRectangle c (intvarg x-interval) (intvarg y-interval)))
-                                             c))
+                                             c))}]
 
-                 }]
     (doseq [eq equations]
       (error/wrap-ex-info-context
-        {:eq eq}
-        (let [[stuff & modifiers] (divide-seq-by keyword? eq)
-              [eop & args] stuff
-              eop-fn (get eop-fns (name eop))
-              constraints (as-> (apply eop-fn args) $ (if (sequential? $) $ [$]))]
-          (doseq [modifier modifiers
-                  constraint constraints]
-            (apply-modifier domain-map constraint modifier)))))))
+       {:eq eq}
+       (let [[stuff & modifiers] (divide-seq-by keyword? eq)
+             [eop & args] stuff
+             eop-fn (get eop-fns (name eop))
+             constraints (as-> (apply eop-fn args) $ (if (sequential? $) $ [$]))]
+         (doseq [modifier modifiers
+                 constraint constraints]
+           (apply-modifier domain-map constraint modifier)))))))
 
 (defn domain-vs-equations-inbalance?
   ([collation]
@@ -770,8 +766,12 @@
      \"y\" [:range 0 20]
      \"z\" [9 10 11 12 13]
 
-     ;; TODO doc for :tuples
-
+     ;; Tuple constraint: key is a vector of variable names, value is [:tuples <allowed-assignments>]
+     ;; where <allowed-assignments> is a seq of integer vectors, each the same length as the key.
+     ;; Constrains the named variables to only take on the listed combinations of values
+     ;; (uses OR-Tools addAllowedAssignments). E.g.:
+     ;;   {[\"a\" \"b\"] [:tuples [[1 2] [3 4] [5 6]]]}
+     ;; means (a=1,b=2) or (a=3,b=4) or (a=5,b=6) are the only allowed assignments.
      }
   equations are of the form:
     eq = [operator left right]
@@ -806,11 +806,11 @@
         domain-map (mk-domain-map model domain)
         objective-var (if objective-instruction (get domain-map objective-varname))
         wrapper (solver-with-callback
-                  (cond-> domain-map
-                          (not retain-temp?)
-                          strip-temp-vars)
-                  (assoc options
-                    :name-value false))]
+                 (cond-> domain-map
+                   (not retain-temp?)
+                   strip-temp-vars)
+                 (assoc options
+                        :name-value false))]
 
     (when objective-instruction
       (case objective-instruction
@@ -847,6 +847,6 @@
                        (cond->> (and limit (pos? limit)) (take limit))
                        (->> (map (fn [solution]
                                    (with-meta (:values solution)
-                                              {::wall-time    (:wall-time solution)
-                                               ::current-time (:current-time solution)})))))
-                   {::status status})))))
+                                     {::wall-time    (:wall-time solution)
+                                      ::current-time (:current-time solution)})))))
+          {::status status})))))
