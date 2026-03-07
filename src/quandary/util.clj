@@ -12,6 +12,7 @@
 (s/def ::collatable (s/keys :opt-un [::equations ::domain]))
 
 (defn utc-now
+  "Returns the current instant as a `ZonedDateTime` in UTC."
   []
   (jtime/with-zone-same-instant (jtime/zoned-date-time) "UTC"))
 
@@ -61,15 +62,15 @@
       (reduce merge2 maps))))
 
 (defmulti collate-merge
-          "Given a collection of Maps, collate the domain and equations and (given strategies
+  "Given a collection of Maps, collate the domain and equations and (given strategies
                   via defmethod) other keys into a single Map."
-          (fn [k vleft vright] k))
+  (fn [k vleft vright] k))
 
 (defmethod collate-merge :domain
   [_ vleft vright]
   (merge-with-using-key
-    (fn [k v1 v2] (throw (ex-info "Duplicate domain key" {:k k :v1 v1 :v2 v2})))
-    vleft vright))
+   (fn [k v1 v2] (throw (ex-info "Duplicate domain key" {:k k :v1 v1 :v2 v2})))
+   vleft vright))
 
 (defmethod collate-merge :equations
   [_ vleft vright]
@@ -88,8 +89,8 @@
   "Transforms a collatable map's :domain values and :equations to carry metadata m."
   [m x]
   (cond-> x
-          (:domain x) (update :domain update-vals #(with-meta % m))
-          (:equations x) (update :equations (partial mapv #(with-meta % m)))))
+    (:domain x) (update :domain update-vals #(with-meta % m))
+    (:equations x) (update :equations (partial mapv #(with-meta % m)))))
 
 (defn collate
   "Given a collection of Maps, collate the domain and equations and \"other\" keys into a single Map.
@@ -102,7 +103,7 @@
     (cond
       (map? x)
       (let [new-acc (merge-with-using-key
-                      collate-merge acc (if-let [m (meta x)] (tag-collatable m x) x))]
+                     collate-merge acc (if-let [m (meta x)] (tag-collatable m x) x))]
         (if (empty? more)
           new-acc
           (recur new-acc (first more) (rest more))))
@@ -135,6 +136,8 @@
         (update-vals (partial map second)))))
 
 (defn examine-equations
+  "Groups equations by variable name for debugging. Returns a map of varname → [equations].
+  Note: hardcoded filters exclude scorer variables and wall-segment cs layout variables."
   [equations]
   ;; Then try
   ;; (let [vname "wall.a.S.3.C.1.width"] [(get domain vname) (get ee vname)])
@@ -145,6 +148,9 @@
        (into {})))
 
 (defn parse-cvar
+  "Parses an application-specific variable name of the form `wall.X.S.N.C.M.suffix` into
+  `[prefix wallid slot cidx suffix]` where prefix is `\"wall.X.S.N.C.M\"`.
+  Returns nil if `s` is nil or does not match."
   [s]
   (if-let [[_ prefix wallid slot cidx suffix]
            (and s (re-matches #"(wall\.([a-z])\.S\.(\d)\.C\.(\d))\.(.*)" s))]
@@ -168,6 +174,8 @@
     ordered?))
 
 (defn var-name-from
+  "Constructs a dot-joined variable name from `obj`'s `::q/var-name-prefix` and `suffix`.
+  When `temp?` is truthy, prepends `\"TEMP\"` to produce a temp variable name."
   [obj suffix & [temp?]]
   (if temp?
     (dot "TEMP" (:quandary.quandary/var-name-prefix obj) suffix)

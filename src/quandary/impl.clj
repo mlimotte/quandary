@@ -51,29 +51,31 @@
   "
   [expr]
   (simplify-polynomial
-    (walk/postwalk
-      (fn node-walker [node]
-        (cond
-          (string? node) [[1 node]]
-          (contains? ARITHMETIC_OPERATORS node) node
-          (symbol? node) [[1 (str node)]]
-          (number? node) [[node]]                           ;; A constant is just [coeff] with no vars
-          (list? node) (let [[op & args] node]
-                         (case op
-                           + (apply add-polynomials args)
-                           * (let [res (reduce multiply-polynomials args)]
-                               (simplify-polynomial res))
-                           - (let [[first-poly & rest-polys] args]
-                               (if (seq rest-polys)
-                                 (apply add-polynomials first-poly (map #(multiply-polynomials [[-1]] %) rest-polys))
-                                 (multiply-polynomials [[-1]] first-poly)))
-                           node))
-          :else (throw (ex-info "Unexpected node" {:node node :type (type node)}))))
-      expr)))
+   (walk/postwalk
+    (fn node-walker [node]
+      (cond
+        (string? node) [[1 node]]
+        (contains? ARITHMETIC_OPERATORS node) node
+        (symbol? node) [[1 (str node)]]
+        (number? node) [[node]]                           ;; A constant is just [coeff] with no vars
+        (list? node) (let [[op & args] node]
+                       (case op
+                         + (apply add-polynomials args)
+                         * (let [res (reduce multiply-polynomials args)]
+                             (simplify-polynomial res))
+                         - (let [[first-poly & rest-polys] args]
+                             (if (seq rest-polys)
+                               (apply add-polynomials first-poly (map #(multiply-polynomials [[-1]] %) rest-polys))
+                               (multiply-polynomials [[-1]] first-poly)))
+                         node))
+        :else (throw (ex-info "Unexpected node" {:node node :type (type node)}))))
+    expr)))
 
 ;; /Polynomial Expansion
 
 (defn remove-coeffcient-of-one
+  "Removes a leading coefficient of 1 from polynomial terms where there is at least one
+  variable (e.g. `[1 \"x\"]` → `[\"x\"]`). Constant-only terms like `[5]` are left unchanged."
   [polynomial]
   (mapv (fn [[a & more :as term]]
           (if (and (= a 1) (> (count term) 1))
@@ -82,6 +84,11 @@
         polynomial))
 
 (defn parse-var-name
+  "Parses a DSL variable name string, returning a map of:
+  `:full-name`, `:varname` (last segment), and optionally
+  `:dollar?` (prefixed with `$`), `:dollar-hash?` (prefixed with `$#`),
+  `:prefix0` (first dot-segment), `:suffix` (remaining dot-segments joined).
+  Returns nil if `s` is nil or does not match the expected pattern."
   [s]
   ;; Note: "#a" is not valid, so it is not matched by this regex.
   (let [[_ dollar? dollar-hash? full-name]
@@ -92,34 +99,40 @@
             [prefix0 & suffix] (when (> (count segments) 1) segments)]
         (cond-> {:full-name full-name
                  :varname   varname}
-                dollar? (assoc :dollar? true)
-                dollar-hash? (assoc :dollar? true :dollar-hash? true)
-                prefix0 (assoc :prefix0 prefix0)
-                suffix (assoc :suffix (string/join "." suffix)))))))
+          dollar? (assoc :dollar? true)
+          dollar-hash? (assoc :dollar? true :dollar-hash? true)
+          prefix0 (assoc :prefix0 prefix0)
+          suffix (assoc :suffix (string/join "." suffix)))))))
 
 (defn mk-qvar
+  "Constructs a fully-qualified variable name string from `o` (a string prefix or a map
+  with `::q/var-name-prefix`) and a `suffix`. Pass `:temp` as the third arg to produce a
+  `TEMP.`-prefixed name, which the solver strips from results."
   ([o suffix]
    (mk-qvar o suffix false))
   ([o suffix temp?]
    (error/wrap-context-for-error-and-logging
-     {:sym o :suffix suffix}
-     (let [args (cond-> []
-                        suffix (conj suffix)
-                        temp? (conj :temp))]
-       (cond
-         (map? o) (qutil/dot (cons (or (::q/var-name-prefix o)
-                                       (throw (ex-info "key is a Map, but no `:quandary.quandary/var-name-prefix`" {})))
-                                   args))
-         (string? o) (qutil/dot (cons o args))
-         :else (throw (ex-info "unrecognized type for mk-var" {:type (type o)})))))))
+    {:sym o :suffix suffix}
+    (let [args (cond-> []
+                 suffix (conj suffix)
+                 temp? (conj :temp))]
+      (cond
+        (map? o) (qutil/dot (cons (or (::q/var-name-prefix o)
+                                      (throw (ex-info "key is a Map, but no `:quandary.quandary/var-name-prefix`" {})))
+                                  args))
+        (string? o) (qutil/dot (cons o args))
+        :else (throw (ex-info "unrecognized type for mk-var" {:type (type o)})))))))
 
 (defn $
-  "This exists for dsl/api alias purposes"
+  "Constructs a variable name from `varname-or-map` and `suffix`.
+  When `varname-or-map` is a map, uses its `::q/var-name-prefix` as the base.
+  Equivalent to `(mk-qvar varname-or-map suffix)`."
   [varname-or-map suffix]
   (mk-qvar varname-or-map suffix))
 
 (defn $#
-  "This exists for dsl/api alias purposes"
+  "Like `$`, but produces a `TEMP.`-prefixed variable name that is stripped from solver results.
+  Use for intermediate variables that should not appear in the final solution map."
   [varname-or-map suffix]
   (mk-qvar varname-or-map suffix :temp))
 
@@ -169,10 +182,10 @@
               ;;     Here, we use naked symbol r, instead of requiring "r" (string)
               ;;   Other than demos, though, this seems uncommon. Would expect $-vars or resolvable vars
               ;(symbol? x) (name x)
-              )
-        ))
-
+              )))
 (defn min-max-domain
+  "Returns `[min max]` for a domain spec. Handles `:boolean` → `[0 1]`,
+  `[:range lo hi]` → `[lo hi]`, and enumerated value vectors → `[min max]`."
   [domain-spec]
   (cond (= domain-spec [:boolean])
         [0 1]
@@ -182,7 +195,8 @@
         [(reduce min domain-spec) (reduce max domain-spec)]))
 
 (defn temp-int-var
-  "Return a domain spec for a new temp var and a range domain with min/max"
+  "Returns a single-entry domain map `{varname [:range t-min t-max]}` for a new TEMP variable
+  whose range spans all possible products of the domains of `v1` and `v2` in `context`."
   [{:keys [domain] :as context} v1 v2 txt]
   (let [[d1min d1max] (->> v1 (get domain) min-max-domain)
         [d2min d2max] (->> v2 (get domain) min-max-domain)
@@ -223,6 +237,9 @@
                 (mapv (partial f bvar-complement) block2))))))
 
 (defn qdsl-internal
+  "Transforms a sequence of DSL entries (domain maps + equation vectors) into a single
+  collated `{:domain … :equations …}` map, expanding arithmetic s-expressions into the
+  internal polynomial term format. Called by the `qdsl` macro after macro-expansion."
   [{:keys [tap-entries initial-context] :as options} entries]
   (let [polynomial-arg-fn (comp remove-coeffcient-of-one flatten-to-polynomial)]
     (when tap-entries
@@ -237,8 +254,7 @@
                                   (cond (#{:only-enforce-if ":only-enforce-if"} op)
                                         (apply-conditional polynomial-arg-fn equation)
                                         :else
-                                        [(cons op (mapv polynomial-arg-fn args))]))))
-        )))
+                                        [(cons op (mapv polynomial-arg-fn args))])))))))
 
 (defn- normalize-$-$# [x]
   (if (and (list? x) (#{'$ '$#} (first x)))
@@ -246,16 +262,19 @@
     `~x))
 
 (defn dqsl-process-body
+  "Walks the `body` forms of a `qdsl` macro call. Maps become domain entries; vectors become
+  equation entries. Variable names are resolved: `$`-prefixed symbols are expanded via
+  `mk-qvar`; other symbols are kept as eval-time expressions if resolvable or in `env?`."
   [env? body]
   (loop [acc [] [item & more] body]
     (if item
       (cond (map? item)
             (recur
-              (conj acc
-                    {:domain (into (empty item)
-                                   (map (fn [[k v]] [(normalize-$-$# k) v]))
-                                   item)})
-              more)
+             (conj acc
+                   {:domain (into (empty item)
+                                  (map (fn [[k v]] [(normalize-$-$# k) v]))
+                                  item)})
+             more)
 
             (vector? item)
             (let [last-item (last acc)
@@ -270,6 +289,7 @@
       acc)))
 
 (defn read-all-edn-objects-from-file
+  "Reads all EDN objects from the classpath resource at `path`, returning them as a vector."
   [path]
   (with-open [rdr (io/reader (io/resource path))]
     (let [pushback-reader (PushbackReader. rdr)

@@ -37,8 +37,9 @@
        (throw e#))))
 
 (defmacro wrap-context-for-error-and-logging
-  "Add the context map data to any thrown exceptions.
-  See `wrap-ex-info-context` for more detail.
-  NOTE: Uses of this macro are \"nestable\"."
+  "Merges `context` into the ex-data of any exceptions thrown from `body`.
+  An alias for `wrap-ex-info-context`; the name reflects its original intent of also
+  enriching log messages (via timbre context), which is no longer in effect.
+  NOTE: Uses of this macro are nestable."
   [context & body]
   `(wrap-ex-info-context ~context ~@body))

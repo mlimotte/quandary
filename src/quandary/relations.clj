@@ -1,8 +1,8 @@
 (ns quandary.relations
   (:require
-    [quandary.quandary :as q]
-    [quandary.util :refer [next-id] :as qutil]
-    [flatland.ordered.map :refer [ordered-map]]))
+   [quandary.quandary :as q]
+   [quandary.util :refer [next-id] :as qutil]
+   [flatland.ordered.map :refer [ordered-map]]))
 
 (defn sqrto
   "Finds the floor square root.
@@ -65,8 +65,7 @@
                                   ;; shadow variable is needed to avoid divide by zero, since we can't use
                                   ;; :only-if with "add-division-equality"
                                   ["add-division-equality" [shadow-target] [total] [shadowN]]
-                                  ["=" [target] [shadow-target] :only-if (q/! N0)]
-                                  ]}
+                                  ["=" [target] [shadow-target] :only-if (q/! N0)]]}
                      N-rules))))
 
 (defmethod qutil/collate-merge ::sq-diff-vars
@@ -95,7 +94,6 @@
         N0 (next-id "TEMP.N0-for-variance")
         shadow-target (next-id "TEMP.shadow-target-for-variance")
 
-
         shape (cond
                 (every? #(or (string? %) (int? %)) terms)
                 :singles
@@ -108,54 +106,53 @@
                                                shadowN [:range 1 total-ub])
                        :equations [["=" [N] (mapv first terms)]]})
         other-rules (qutil/collate
-                      (for [v (case shape
-                                :singles terms
-                                :nv (map second terms))
-                            :let [diff-v (next-id (qutil/dot v "diff" :temp))
-                                  sq-diff-v (next-id (qutil/dot v "sq-diff" :temp))]]
+                     (for [v (case shape
+                               :singles terms
+                               :nv (map second terms))
+                           :let [diff-v (next-id (qutil/dot v "diff" :temp))
+                                 sq-diff-v (next-id (qutil/dot v "sq-diff" :temp))]]
                         ;; NOTE: we multiply by n in the next step below.
-                        {:domain        (ordered-map
-                                          diff-v [:range (- total-ub) total-ub]
-                                          sq-diff-v [:range total-lb (* total-ub total-ub)])
-                         :equations     [["=" [diff-v] [mean-avg [-1 v]]]
-                                         ["=" [sq-diff-v] [[diff-v diff-v]]]]
-                         ::sq-diff-vars [sq-diff-v]}))]
+                       {:domain        (ordered-map
+                                        diff-v [:range (- total-ub) total-ub]
+                                        sq-diff-v [:range total-lb (* total-ub total-ub)])
+                        :equations     [["=" [diff-v] [mean-avg [-1 v]]]
+                                        ["=" [sq-diff-v] [[diff-v diff-v]]]]
+                        ::sq-diff-vars [sq-diff-v]}))]
     (if (zero? (count terms))
 
       {:domain (ordered-map target [0])}
 
       (qutil/collate
-        N-rules
-        other-rules
-        {:domain    (ordered-map sum-sq-diffs [:range total-lb (* total-ub total-ub)]
-                                 N0 [:boolean]
-                                 shadow-target [:range total-lb (* total-ub total-ub)])
-         :equations [["="
-                      [sum-sq-diffs]
-                      (case shape
-                        :singles (::sq-diff-vars other-rules)
+       N-rules
+       other-rules
+       {:domain    (ordered-map sum-sq-diffs [:range total-lb (* total-ub total-ub)]
+                                N0 [:boolean]
+                                shadow-target [:range total-lb (* total-ub total-ub)])
+        :equations [["="
+                     [sum-sq-diffs]
+                     (case shape
+                       :singles (::sq-diff-vars other-rules)
                         ;; In the :nv case, terms vector is parallel with vars vector, so we can do this:
-                        :nv (mapv (fn [[n _] v]
-                                    (vector n v))
-                                  terms
-                                  (::sq-diff-vars other-rules)))]
+                       :nv (mapv (fn [[n _] v]
+                                   (vector n v))
+                                 terms
+                                 (::sq-diff-vars other-rules)))]
 
-                     ["=" [N] [0] :only-if N0]
-                     [">" [N] [0] :only-if (q/! N0)]
+                    ["=" [N] [0] :only-if N0]
+                    [">" [N] [0] :only-if (q/! N0)]
 
-                     ["=" [shadowN] [1] :only-if N0]
-                     ["=" [target] [0] :only-if N0]
+                    ["=" [shadowN] [1] :only-if N0]
+                    ["=" [target] [0] :only-if N0]
 
                      ;["add-division-equality" [target] [sum-sq-diffs] [N]]
-                     ["=" [shadowN] [N] :only-if (q/! N0)]
+                    ["=" [shadowN] [N] :only-if (q/! N0)]
                      ;; shadow variable is needed to avoid divide by zero, since we can't use
                      ;; :only-if with "add-division-equality"
-                     ["add-division-equality" [shadow-target] [sum-sq-diffs] [shadowN]]
-                     ["=" [target] [shadow-target] :only-if (q/! N0)]
+                    ["add-division-equality" [shadow-target] [sum-sq-diffs] [shadowN]]
+                    ["=" [target] [shadow-target] :only-if (q/! N0)]]}
 
-                     ]}
-        (if (string? mean-avg)
-          (mean mean-avg terms total-lb total-ub))))))
+       (if (string? mean-avg)
+         (mean mean-avg terms total-lb total-ub))))))
 
 (defn variance
   "Calculate the variance for the given terms. See `variance-from` for more details.
@@ -165,10 +162,13 @@
     {:equations [["=" [target] [0]]]}
     (let [mean-avg-varname (next-id "TEMP.mean-avg")]
       (qutil/collate
-        {:domain (ordered-map mean-avg-varname [:range total-lb total-ub])}
-        (variance-from target mean-avg-varname terms total-lb total-ub)))))
+       {:domain (ordered-map mean-avg-varname [:range total-lb total-ub])}
+       (variance-from target mean-avg-varname terms total-lb total-ub)))))
 
 (defn is-exclusive-betweeno
+  "Returns domain and equations that set boolean `target-var` to true iff `pt` is strictly
+  inside the open interval `(start, stop)`. When `target-var` is false, `pt` is constrained
+  to be at or outside the interval boundaries."
   [pt start stop target-var]
   ;     start     stop
   ;       *--------*

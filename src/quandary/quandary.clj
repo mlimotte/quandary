@@ -50,9 +50,8 @@
 (defonce load-native (delay (Loader/loadNativeLibraries)))
 
 (defn nil-or-blank?
-  "True if `s` is a nil or \"\".
-  Note: string/blank on it's own will throw an exception for
-  non-string values (e.g. numbers). This fn will just return false instead."
+  "Returns true if `s` is nil or a blank string.
+  Unlike `string/blank?`, returns false (rather than throwing) for non-string values."
   [s]
   (or (nil? s)
       (and (string? s) (string/blank? s))))
@@ -74,6 +73,7 @@
 ;; Primitives
 
 (defn lvar?
+  "Returns true if `x` is an OR-Tools integer variable (IntVar or BoolVar)."
   [x]
   (or (instance? IntVar x)
       (instance? BoolVar x)))
@@ -81,10 +81,14 @@
 (s/def ::varname string?)
 (s/def ::varname-or-int (s/or :varname ::non-blank-string? :int int?))
 
-(defn named? [x]
+(defn named?
+  "Returns true if `x` is a String or implements `clojure.lang.Named` (keyword or symbol)."
+  [x]
   (or (string? x) (instance? clojure.lang.Named x)))
 
 (defn domain
+  "Creates an OR-Tools `Domain` from a seq of integer values. Accepts either a flat
+  sequence of integers or a single collection."
   [& [v0 :as values]]
   (let [values_ (if (coll? v0) (apply concat values) values)
         typ (cond
@@ -105,12 +109,17 @@
     (mapv strip-temp-vars x)))
 
 (defn as-2d-int-array
+  "Converts a seq of seqs into a Java `Object[]` of `int[]`, for use with OR-Tools tuple constraints."
   [tuples]
   (object-array (mapv int-array tuples)))
 
 ;;;;;;;
 
 (defn mk-solutions-callback
+  "Creates an OR-Tools `CpSolverSolutionCallback` that records each solution into `state-ref`.
+  `int-vars` is the domain-map of solver variables. Each solution's `:values` entry mirrors
+  the structure of `int-vars` with each variable replaced by `[name value]` when the
+  `:name-value` option is true (default), or by a raw long value otherwise."
   [state-ref
    int-vars
    {:keys [name-value]
@@ -136,6 +145,12 @@
 (defrecord SolverWrapper [solver callback solved-state value-fn])
 
 (defn solver-with-callback
+  "Creates and configures a CP-SAT solver and solution callback. Returns a `SolverWrapper`.
+  Options:
+    - `:timeout` — max seconds to run (default 20.0)
+    - `:num-workers` — number of parallel workers; omit or pass 0 to use OR-Tools default (all cores)
+    - `:relative-gap-limit` — stop within this fraction of optimal
+    - `:enumerate-all` — collect all solutions (not supported with multiple workers)"
   [vars
    {:keys [timeout relative-gap-limit num-workers enumerate-all]
     :or   {timeout     20.0
@@ -171,9 +186,8 @@
     (->SolverWrapper solver cb solved-state #(.value solver %))))
 
 (defn solve!
-  "Establish the JNI wrappers first with the Delay\"
-    `@load-native`
-  "
+  "Runs the CP-SAT solver against `model`, collecting solutions via the callback in `solver-wrapper`.
+  Ensure `@load-native` has been realized before calling this directly."
   [solver-wrapper model]
   (.solve (:solver solver-wrapper) model (:callback solver-wrapper)))
 
@@ -200,6 +214,8 @@
   ")
 
 (defn negative-term
+  "Negates a polynomial term by multiplying its leading numeric coefficient by -1.
+  Handles 1-, 2-, and 3-element term vectors."
   ([t1]
    [(* -1 t1)])
   ([t1 t2]
@@ -212,6 +228,8 @@
 (def the-parser (insta/parser eq-grammar))
 
 (defn parse-equations
+  "Parses one or more equation strings (e.g. `\"r + p = 20\"`) into the internal polynomial
+  equation format. Multiple strings are joined with newlines before parsing."
   [& args]
   ; NOTE: For the output, I am attempting to strike a balance between something
   ;  that is human-readable and writeable and also machine-readable.
@@ -349,6 +367,8 @@
     (sp/transform [(sp/walker fn?)] #(% m2) m2)))
 
 (defn- new-int-var-domain-from-mult
+  "Creates a temporary IntVar whose domain is wide enough to hold any product of v1 × v2,
+  considering all four sign combinations of their min/max bounds."
   [model v1 v2]
   (let [d1min (-> v1 .getDomain .min)
         d1max (-> v1 .getDomain .max)
@@ -368,6 +388,8 @@
   :args (s/cat :domain-map ::domain-map :key any?)
   :ret lvar?)
 (defn eval-in-domain
+  "Looks up `key` in `domain-map`, returning its OR-Tools IntVar/BoolVar.
+  Numbers are returned as longs. Throws with variable name suggestions if a string key is not found."
   [domain-map key]
   (cond
     (named? key) (let [k (name key)]
@@ -387,12 +409,15 @@
     :else nil))
 
 (defn int-var-arg
+  "Extracts a single OR-Tools variable from a single-element polynomial.
+  Use for operators that require a bare IntVar rather than a LinearArgument."
   [domain-map polynomial]
   (when (not= (count polynomial) 1)
     (throw (ex-info "polynomial must have 1 element" {:polynomial polynomial})))
   (eval-in-domain domain-map (first polynomial)))
 
 (defn long-arg
+  "Extracts a single long value from a single-element polynomial."
   [polynomial]
   (when (not= (count polynomial) 1)
     (throw (ex-info "polynomial must have 1 element" {:polynomial polynomial})))
@@ -481,6 +506,8 @@
           string-factors))
 
 (defn validate-rest-strings!
+  "Throws if any element after the first in `term` is not a String.
+  Used to validate multi-factor multiplication terms like `[3 \"x\" \"y\"]`."
   [term]
   (when-not (every? string? (rest term))
     (throw (ex-info "In a term with 3 or more factors, first can be a numeric, rest must be String." {}))))
@@ -555,18 +582,23 @@
     expr))
 
 (defn- linear-arg
+  "Returns an OR-Tools LinearArgument for `polynomial`. Single numeric-constant polynomials
+  are wrapped with `.newConstant`; all others are delegated to `linear-arg-or-long`."
   [model domain-map polynomial]
   (if-let [narg (maybe-numeric-arg polynomial)]
     (.newConstant model narg)
     (linear-arg-or-long model domain-map polynomial)))
 
 (defn- interval-arg
+  "Looks up an interval variable by name in `domain-map`."
   [domain-map arg]
   (eval-in-domain domain-map arg))
 
 (s/fdef literal-arg
   :args (s/cat :domain-map ::domain-map-light :arg any?))
 (defn- literal-arg
+  "Returns an OR-Tools `Literal` for `arg`. Handles negation (strings prefixed with `!`),
+  numeric values, and plain variable names looked up in `domain-map`."
   [domain-map arg]
   (let [[t1] (if (sequential? arg)
                arg
@@ -600,6 +632,8 @@
           sequence))
 
 (defmulti apply-modifier
+  "Applies a constraint modifier to an OR-Tools constraint object.
+  Dispatches on the modifier keyword (e.g. `:only-if`)."
   (fn [domain-map constraint modifier] (first modifier)))
 
 (defmethod apply-modifier :only-if
@@ -607,6 +641,8 @@
   (.onlyEnforceIf constraint (literal-arg domain-map [q1])))
 
 (defn eop-<=
+  "Adds a less-than-or-equal constraint to `model`. With two polynomial args (`x`, `y`): `x <= y`.
+  With three args (`x`, `y`, `z`): `x <= y <= z` (range constraint)."
   [model linarg lin-long-arg x y & [z]]
 
   ;(eop-<= model linarg lin-long-arg y x)
@@ -635,6 +671,8 @@
      (.addLessOrEqual model (linarg y) (lin-long-arg z))]))
 
 (defn eop-<
+  "Adds a strictly-less-than constraint to `model`. With two polynomial args (`x`, `y`): `x < y`.
+  With three args (`x`, `y`, `z`): `x < y < z` (strict range constraint)."
   [model linarg lin-long-arg x y & [z]]
   (cond
     (and (nil? z) (maybe-numeric-arg x))
@@ -731,6 +769,9 @@
            (apply-modifier domain-map constraint modifier)))))))
 
 (defn domain-vs-equations-inbalance?
+  "Returns a map of `{:unused-domain … :missing-domain …}` if there are variables present in
+  the domain but absent from equations, or vice versa. Returns nil when balanced.
+  Unconstrained variables slow the solver significantly."
   ([collation]
    (domain-vs-equations-inbalance? (:domain collation) (:equations collation) (:assumptions collation)))
   ([domain equations assumptions]

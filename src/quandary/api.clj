@@ -5,6 +5,9 @@
             [quandary.impl :as impl]))
 
 (defn solve
+  "Solve a constraint satisfaction/optimization problem.
+  Accepts a map with `:domain` and `:equations` keys (as returned by `qdsl` or `collate`)
+  and an optional `options` map passed through to the underlying solver."
   ([d-and-e] (solve d-and-e {}))
   ([{:keys [domain equations]} options]
    (q/solve-equations domain equations options)))
@@ -18,23 +21,24 @@
 (def ordered-map flatland.ordered.map/ordered-map)
 
 (defmacro qdsl
-  "Top level macro for compiling quandary domain and expression DSL into a computer friendly form
-  for `solve`.  Use `s.q.a/collate` to combine the output of multiple `qdsl` calls.
-  options:
-    - :tag (String) - Maintain some provenance about the source or topic of some batch of
-      domain and expressions. This can be helpful for debugging or disabling sections at run time.
-    - :tap-entries (boolean) - Set true to tap> the entries created by impl/dqsl-process-body.
-      This is the \"initial\" data structure  after Macro processing. It will be further refined through
-      multiple functions.
-    - initial-context (Map) - Optional Map of {:domain, :equations} that will be collated with your qdsl body.
+  "Compiles a quandary domain and equation DSL body into a `{:domain … :equations …}` map
+  suitable for `solve`. Use `collate` to combine the output of multiple `qdsl` calls.
 
-  A common usage pattern is to wrap the call to this macro in let, and bind locals to results
-  of qapi/$ and qapi/$#, or partials of the same for more concise reference in the body."
+  Options (first argument, a map):
+    - `:tag` (String) — attaches provenance metadata to the result; useful for debugging
+      or conditionally disabling sections at runtime.
+    - `:tap-entries` (boolean) — when true, taps the intermediate entry structure produced
+      by macro expansion for inspection.
+    - `:initial-context` (map) — a `{:domain …, :equations …}` map that is collated with
+      the body before processing.
+
+  A common pattern is to bind locals to results of `$` and `$#` (or partials of them)
+  for concise variable name references in the body."
   [{:keys [tag] :as options} & body]
   (let [env? #(contains? (set (keys &env)) %)
         entries (impl/dqsl-process-body env? body)]
     `(cond-> (impl/qdsl-internal ~options [~@entries])
-             ~tag (with-meta {:tag ~tag}))))
+       ~tag (with-meta {:tag ~tag}))))
 
 (defmacro qdsl-from-resource
   "See `qdsl`.
@@ -47,4 +51,4 @@
         entries (impl/dqsl-process-body env? body)]
     `(let [~@(interleave (:in file-options) args)]
        (cond-> (impl/qdsl-internal ~options [~@entries])
-               ~tag (with-meta {:tag ~tag})))))
+         ~tag (with-meta {:tag ~tag})))))
