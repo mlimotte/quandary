@@ -1,5 +1,6 @@
 (ns quandary.api
-  (:require [quandary.quandary :as q]
+  (:require [flatland.ordered.map]
+            [quandary.quandary :as q]
             [quandary.util :as qutil]
             [quandary.impl :as impl]))
 
@@ -13,8 +14,11 @@
 (def $ impl/$)
 (def $# impl/$#)
 
+;; ordered-maps are not required, but ordering the domain can be helpful for human review and debugging
+(def ordered-map flatland.ordered.map/ordered-map)
+
 (defmacro qdsl
-  "Top level macro for compiling quadary domain and expression DSL into a computer friendly form
+  "Top level macro for compiling quandary domain and expression DSL into a computer friendly form
   for `solve`.  Use `s.q.a/collate` to combine the output of multiple `qdsl` calls.
   options:
     - :tag (String) - Maintain some provenance about the source or topic of some batch of

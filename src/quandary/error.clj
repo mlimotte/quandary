@@ -1,8 +1,7 @@
 (ns quandary.error
-  (:require [taoensso.timbre :as timbre]
-            )
+  (:require [clojure.tools.logging :as log])
   (:import
-    (clojure.lang ExceptionInfo)))
+   (clojure.lang ExceptionInfo)))
 
 (def ^{:dynamic true} *wrap-ex-info-context* {})
 
@@ -33,19 +32,13 @@
                    (.setStackTrace (.getStackTrace e#)))]
          (throw e2#)))
      (catch Exception e#
-       (timbre/error "wrap-ex-info-context caught non-ex-info exception"
-                     (assoc ~context
-                       ; :trace (sulog/stack-trace-str e#)
-                       ::message (.getMessage e#)))
+       (log/error e# (str "wrap-ex-info-context caught non-ex-info exception "
+                          (assoc ~context ::message (.getMessage e#))))
        (throw e#))))
 
 (defmacro wrap-context-for-error-and-logging
-  "Add the context map data to any thrown exceptions and all logging messages.
-  See `wrap-ex-info-context` for some more detail (particularly for thrown errors).
+  "Add the context map data to any thrown exceptions.
+  See `wrap-ex-info-context` for more detail.
   NOTE: Uses of this macro are \"nestable\"."
   [context & body]
-  `(wrap-ex-info-context
-     ~context
-     (timbre/with-context+
-       ~context
-       ~@body)))
+  `(wrap-ex-info-context ~context ~@body))

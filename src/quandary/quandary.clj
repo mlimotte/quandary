@@ -30,7 +30,7 @@
             [clojure.walk :as walk]
             [clojure.set]
             [com.rpl.specter :as sp]
-            [taoensso.timbre :as timbre]
+            [clojure.tools.logging :as log]
             [instaparse.core :as insta]
             [quandary.error :as error]
             [quandary.util :as qutil])
@@ -141,7 +141,7 @@
     :or   {timeout     20.0
            num-workers 0}
     :as   options}]
-  (timbre/info (format "Configuring solver with timeout %s" timeout))
+  (log/info (format "Configuring solver with timeout %s" timeout))
   ;; Java doc with the list of parameters:
   ;; https://or-tools.github.io/docs/javadoc/com/google/ortools/sat/SatParameters.Builder.html
 
@@ -517,7 +517,7 @@
        (case (take 3 term-types)
 
          []
-         (timbre/warn "Empty term in polynomial" {})
+         (log/warn "Empty term in polynomial")
 
          [:num]
          (.add expr (.newConstant model t1))
@@ -832,9 +832,9 @@
       (.exportToFile model export-pb-to-file))
 
     ;; Run it and return results
-    (timbre/info "Running solver" {:options         options
-                                   :domain-count    (count domain)
-                                   :equations-count (count equations)})
+    (log/info (str "Running solver " {:options         options
+                                      :domain-count    (count domain)
+                                      :equations-count (count equations)}))
     ;; Use `(.name status)`, for example
     (let [status (solve! wrapper model)]
       (let [solutions (-> wrapper :solved-state deref :solutions)]

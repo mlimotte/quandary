@@ -2,7 +2,7 @@
   "Utilities for diagnosing solver failures — primarily 'No solutions' and infeasible constraint issues.
   Use this namespace to inspect the raw equations and domain before/during a solve attempt."
   (:require [com.rpl.specter :as sp]
-            [taoensso.timbre :as timbre])
+            [clojure.tools.logging :as log])
   (:import (java.util.regex Pattern)))
 
 (defonce tapped (atom []))
@@ -45,7 +45,7 @@
    qdebug/eqs-from and qdebug/domains-from.
    Returns a map with stripped down `domain`, fixed `:assignments`, and simplified equations."
   [{:keys [domain equations] :as rules} additional-assignments]
-  (timbre/info "Processing inputs" {:domain (count domain) :equations (count equations)})
+  (log/info (str "Processing inputs " {:domain (count domain) :equations (count equations)}))
   (let [assignments (merge-with (fn [a b] (throw (ex-info "assignment conflict" {:a a :b b})))
                                 (into {}
                                       (for [[k v] domain

@@ -1,11 +1,10 @@
 (ns quandary.util
-  (:require
-   [com.rpl.specter :as sp]
-   [taoensso.timbre :as timbre]
-   [clojure.spec.alpha :as s]
-   [clojure.set]
-   [clojure.string :as string]
-   [java-time.api :as jtime]))
+  (:require [com.rpl.specter :as sp]
+            [clojure.tools.logging :as log]
+            [clojure.spec.alpha :as s]
+            [clojure.set]
+            [clojure.string :as string]
+            [java-time.api :as jtime]))
 
 (s/def ::equations sequential?)
 (s/def ::domain map?)
@@ -62,15 +61,15 @@
       (reduce merge2 maps))))
 
 (defmulti collate-merge
-  "Given a collection of Maps, collate the domain and equations and (given strategies
-          via defmethod) other keys into a single Map."
-  (fn [k vleft vright] k))
+          "Given a collection of Maps, collate the domain and equations and (given strategies
+                  via defmethod) other keys into a single Map."
+          (fn [k vleft vright] k))
 
 (defmethod collate-merge :domain
   [_ vleft vright]
   (merge-with-using-key
-   (fn [k v1 v2] (throw (ex-info "Duplicate domain key" {:k k :v1 v1 :v2 v2})))
-   vleft vright))
+    (fn [k v1 v2] (throw (ex-info "Duplicate domain key" {:k k :v1 v1 :v2 v2})))
+    vleft vright))
 
 (defmethod collate-merge :equations
   [_ vleft vright]
@@ -89,8 +88,8 @@
   "Transforms a collatable map's :domain values and :equations to carry metadata m."
   [m x]
   (cond-> x
-    (:domain x) (update :domain update-vals #(with-meta % m))
-    (:equations x) (update :equations (partial mapv #(with-meta % m)))))
+          (:domain x) (update :domain update-vals #(with-meta % m))
+          (:equations x) (update :equations (partial mapv #(with-meta % m)))))
 
 (defn collate
   "Given a collection of Maps, collate the domain and equations and \"other\" keys into a single Map.
@@ -103,7 +102,7 @@
     (cond
       (map? x)
       (let [new-acc (merge-with-using-key
-                     collate-merge acc (if-let [m (meta x)] (tag-collatable m x) x))]
+                      collate-merge acc (if-let [m (meta x)] (tag-collatable m x) x))]
         (if (empty? more)
           new-acc
           (recur new-acc (first more) (rest more))))
@@ -162,11 +161,10 @@
         ordered? (and (zero? (Integer/parseInt (first ids)))
                       (= (dec (count ids)) (Integer/parseInt (last ids))))]
     (when-not ordered?
-      (timbre/warn "Domain is not ordered"
-                   (merge context
-                          {:count (count ids)
-                           :range [(first ids) (last ids)]
-                           :ids   ids})))
+      (log/warn (str "Domain is not ordered "
+                     (merge context {:count (count ids)
+                                     :range [(first ids) (last ids)]
+                                     :ids   ids}))))
     ordered?))
 
 (defn var-name-from

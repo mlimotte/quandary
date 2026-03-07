@@ -6,27 +6,27 @@
 
 (deftest test-new-int-var-domain-from-mult
   (let [new-int-var-domain-from-mult @(ns-resolve 'quandary.quandary 'new-int-var-domain-from-mult)
-        _     @load-native
+        _ @load-native
         model (CpModel.)]
     ;; positive × positive: [0,3] × [0,4] → [0,12]
-    (let [dm     (mk-domain-map model {"a" [:range 0 3] "b" [:range 0 4]})
+    (let [dm (mk-domain-map model {"a" [:range 0 3] "b" [:range 0 4]})
           result (new-int-var-domain-from-mult model (get dm "a") (get dm "b"))]
-      (is (= 0  (-> result .getDomain .min)))
+      (is (= 0 (-> result .getDomain .min)))
       (is (= 12 (-> result .getDomain .max))))
     ;; mixed signs: [1,3] × [-2,4] → extremes {-6,-2,4,12} → [-6,12]
-    (let [dm     (mk-domain-map model {"x" [:range 1 3] "y" [:range -2 4]})
+    (let [dm (mk-domain-map model {"x" [:range 1 3] "y" [:range -2 4]})
           result (new-int-var-domain-from-mult model (get dm "x") (get dm "y"))]
       (is (= -6 (-> result .getDomain .min)))
       (is (= 12 (-> result .getDomain .max))))
     ;; both negative: [-5,-1] × [-3,-1] → extremes {1,3,5,15} → [1,15]
-    (let [dm     (mk-domain-map model {"p" [:range -5 -1] "q" [:range -3 -1]})
+    (let [dm (mk-domain-map model {"p" [:range -5 -1] "q" [:range -3 -1]})
           result (new-int-var-domain-from-mult model (get dm "p") (get dm "q"))]
-      (is (= 1  (-> result .getDomain .min)))
+      (is (= 1 (-> result .getDomain .min)))
       (is (= 15 (-> result .getDomain .max))))))
 
 (deftest test-eval-in-domain
   ;; number key converts to long without consulting the domain map
-  (is (= 5  (eval-in-domain {} 5)))
+  (is (= 5 (eval-in-domain {} 5)))
   (is (= 42 (eval-in-domain {} 42)))
   ;; string/keyword key looks up in domain map (name coercion applied)
   (is (= :var (eval-in-domain {"a" :var} "a")))
@@ -62,10 +62,10 @@
 
 (deftest test-linear-arg-or-long
   (let [linear-arg-or-long @(ns-resolve 'quandary.quandary 'linear-arg-or-long)
-        _                  @load-native
-        model              (CpModel.)
-        domain-map         (mk-domain-map model {"a" [:range 0 10]
-                                                 "b" [:range 0 10]})]
+        _ @load-native
+        model (CpModel.)
+        domain-map (mk-domain-map model {"a" [:range 0 10]
+                                         "b" [:range 0 10]})]
     ;; empty polynomial → throws
     (is (thrown? ExceptionInfo (linear-arg-or-long model domain-map [])))
     ;; single-var term → LinearArgument
@@ -83,8 +83,8 @@
 
 (deftest test-linear-arg
   (let [linear-arg @(ns-resolve 'quandary.quandary 'linear-arg)
-        _          @load-native
-        model      (CpModel.)
+        _ @load-native
+        model (CpModel.)
         domain-map (mk-domain-map model {"a" [:range 0 10]})]
     ;; numeric polynomial → constant LinearArgument (via maybe-numeric-arg)
     (is (instance? LinearArgument (linear-arg model {} [5])))
@@ -94,9 +94,9 @@
 
 (deftest test-literal-arg
   (let [literal-arg @(ns-resolve 'quandary.quandary 'literal-arg)
-        _           @load-native
-        model       (CpModel.)
-        domain-map  (mk-domain-map model {"b" [:boolean]})]
+        _ @load-native
+        model (CpModel.)
+        domain-map (mk-domain-map model {"b" [:boolean]})]
     ;; number → long (pure, no model/domain access)
     (is (= 5 (literal-arg {} 5)))
     (is (= 5 (literal-arg {} [5])))
@@ -182,16 +182,16 @@
 
   ;; >=
   (are [domain-b eqs expected]
-       (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
-          expected)
+    (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
+       expected)
     [11 12] [[">=" ["a"] ["b"]]] 11
     [11] [[">=" ["a"] [7]]] 10                              ; b can be any domain w/ 1 option (just to fulfill mk-domain-map
     [11] [[">=" [10] ["a"]]] 10)
 
   ;; >
   (are [domain-b eqs expected]
-       (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
-          expected)
+    (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
+       expected)
     [11 12] [[">" ["a"] ["b"]]] nil
     [10 11 12] [[">" ["a"] ["b"]]] 11
     [11] [[">" ["a"] [10]]] 11
@@ -235,13 +235,13 @@
                                "answer" [:range 0 100]}
                               [["add-division-equality" ["answer"] ["a"] ["b"]]])
          {"a" 20 "b" 2 "answer" 10}))
-  ;; Per CP-Sat docs, OnlyEnforceIf only works on bool_or, bool_and, and linear constraints.
-  (is (thrown? ExceptionInfo
-               (solve-with-1-worker {"answer" [:range 0 100]
-                                     "foo"    [:boolean]}
-                                    [["add-division-equality" ["answer"] [13] [2] :only-if "foo"]]
-                                    {:assumptions ["foo"]})
-               []))
+  ;; Per CP-Sat docs, OnlyEnforceIf now works on non-linear constraints
+  (is (= (solve-with-1-worker {"answer" [:range 0 100]
+                               "foo"    [:boolean]}
+                              [["add-division-equality" ["answer"] [13] [2] :only-if "foo"]]
+                              {:assumptions ["foo"]})
+         {"foo" 1 "answer" 6}))
+
   ;; Using constants
   (is (= (solve-with-1-worker {"answer" [:range 0 100]}
                               [["add-division-equality" ["answer"] [21] [3]]])
@@ -288,17 +288,15 @@
 (deftest test-solve-equations-with-assumptions
   ;; Basic only-if test
   (is (= (solve-with-1-worker {"a" [:range 10 15] "b" [:boolean]}
-                              [["=" ["a"] [12] :only-if "b"]]
+                              [["=" ["a"] [12] :only-if "b"]
+                               ["!=" ["a"] [12] :only-if "!b"]]
                               {:assumptions ["b"]})
          {"a" 12, "b" 1}))
-
-  ;; Not working
-  ;; NOT (!) doesn't work, but not sure why.
-  ;(is (= (solve-equations {"a" [:range 10 15] "b" [:boolean]}
-  ;                        [["=" ["a"] [12] :only-if "b"]]
-  ;                        {:assumptions ["!b"]})
-  ;       [{"a" 12, "b" 1}]))
-  )
+  (is (= (solve-equations {"a" [:range 10 100] "b" [:boolean]}
+                          [["=" ["a"] [12] :only-if "b"]
+                           ["=" ["a"] [13] :only-if "!b"]]
+                          {:assumptions ["!b"]})
+         [{"a" 13, "b" 0}])))
 
 (deftest test-solve-interval-no-overlap2d
   (let [result (map (fn [{:strs [x2 y2]}] [x2 y2])
@@ -364,10 +362,10 @@
         result (sort
                  (map (fn [{:strs [x2 y2 x3 y3]}] [x2 y2 x3 y3])
                       (solve-equations domain
-                                      [["no-overlap-2d" [["x1int" "y1int"] ["x2int" "y2int"] ["x3int" "y3int"]]]
-                                       ["=" ["prsnt"] [1]]
-                                       ["=" ["not-prsnt"] [0]]]
-                                      {:enumerate-all true})))]
+                                       [["no-overlap-2d" [["x1int" "y1int"] ["x2int" "y2int"] ["x3int" "y3int"]]]
+                                        ["=" ["prsnt"] [1]]
+                                        ["=" ["not-prsnt"] [0]]]
+                                       {:enumerate-all true})))]
     ;; (1) is fixed at [0, 0], (2) is free b/c it's constraints are "not present", and (3) can not overlap (1)
     (is (= result [[0 0 2 0]
                    [1 0 2 0]
@@ -379,11 +377,11 @@
         domain {["x1" "y1"] [:tuples allowed-wh]
                 ["x2" "y2"] [:tuples allowed-wh]}
         result (sort
-                (map (fn [{:strs [x1 y1 x2 y2]}] [x1 y1 x2 y2])
-                     (solve-equations domain
-                                      [["<=" ["y1"] ["y2"]]
-                                       [">=" ["x1"] [5]]
-                                       [">=" ["x2"] [1]]]
-                                      {:enumerate-all true})))]
+                 (map (fn [{:strs [x1 y1 x2 y2]}] [x1 y1 x2 y2])
+                      (solve-equations domain
+                                       [["<=" ["y1"] ["y2"]]
+                                        [">=" ["x1"] [5]]
+                                        [">=" ["x2"] [1]]]
+                                       {:enumerate-all true})))]
     (is (= result [[10 20 3 21]
                    [10 20 10 20]]))))
