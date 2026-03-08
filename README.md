@@ -1,5 +1,7 @@
 # Quandary
 
+[![Clojars Project](https://img.shields.io/clojars/v/io.github.mlimotte/quandary.svg)](https://clojars.org/io.github.mlimotte/quandary)
+
 Quandary is a Clojure library for solving constraint satisfaction and optimization problems. It wraps Google's [OR-Tools CP-SAT solver](https://developers.google.com/optimization/reference/python/sat/python/cp_model) behind a high-level DSL so you can express problems as variable domains and equations rather than low-level solver API calls.
 
 ## What it does
@@ -29,15 +31,16 @@ The `qdsl` macro provides a more ergonomic interface for larger problems, with C
 
 - [DSL Reference](docs/dsl.md) — full guide to `qdsl`, domain specs, operators, `collate`, `solve` options, and debugging
 
+## Build (lib jar + project jar)
+    clj -T:build jar
+
+# Clean build artifacts
+    clj -T:build clean
+
 ## Running the tests
 
-```bash
-clj -M:test
-```
+    clj -M:test
 
 To run a single test var:
 
-```bash
-clj -M:test -v quandary.quandary-test/test-name
-```
-
+    clj -M:test -v quandary.quandary-test/test-name
