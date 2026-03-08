@@ -743,8 +743,6 @@
                                            (.addModuloEquality
                                             model
                                             (linarg target) (linarg var) (linarg mod)))
-                 ;; WARNING: Don't use `add-division-equality` with `:only-if`. It will never find solutions or
-                 ;;   report CP-Sat model is invalid. only-if works for "linear" and basic logic constraints.
                  ;;   add-division-equality is non-linear.
                  "add-division-equality" (fn [target num denom]
                                            (.addDivisionEquality ; "rounded toward 0"

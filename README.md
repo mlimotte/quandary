@@ -25,6 +25,10 @@ Quandary feeds these to CP-SAT and returns all satisfying assignments.
 
 The `qdsl` macro provides a more ergonomic interface for larger problems, with Clojure-native variable binding, temporary variables, and composable constraint blocks via `collate`.
 
+## Documentation
+
+- [DSL Reference](docs/dsl.md) — full guide to `qdsl`, domain specs, operators, `collate`, `solve` options, and debugging
+
 ## Running the tests
 
 ```bash

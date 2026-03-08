@@ -62,8 +62,7 @@
                                   ["=" [target] [0] :only-if N0]
 
                                   ["=" [shadowN] [N] :only-if (q/! N0)]
-                                  ;; shadow variable is needed to avoid divide by zero, since we can't use
-                                  ;; :only-if with "add-division-equality"
+                                  ;; shadow variable is needed to avoid divide by zero
                                   ["add-division-equality" [shadow-target] [total] [shadowN]]
                                   ["=" [target] [shadow-target] :only-if (q/! N0)]]}
                      N-rules))))
@@ -146,8 +145,7 @@
 
                      ;["add-division-equality" [target] [sum-sq-diffs] [N]]
                     ["=" [shadowN] [N] :only-if (q/! N0)]
-                     ;; shadow variable is needed to avoid divide by zero, since we can't use
-                     ;; :only-if with "add-division-equality"
+                     ;; shadow variable is needed to avoid divide by zero
                     ["add-division-equality" [shadow-target] [sum-sq-diffs] [shadowN]]
                     ["=" [target] [shadow-target] :only-if (q/! N0)]]}
 
