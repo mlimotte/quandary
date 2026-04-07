@@ -34,6 +34,11 @@ The `qdsl` macro provides a more ergonomic interface for larger problems, with C
 ## Build (lib jar + project jar)
     clj -T:build jar
 
+## Deploy
+    
+    # Update version number in build.clj
+    clj -T:build deploy
+
 # Clean build artifacts
     clj -T:build clean
 

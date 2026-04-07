@@ -163,6 +163,30 @@
   (is (= (divide-seq-by identity nil) []))
   (is (= (divide-seq-by pos? [-1 0 -2 3 3 -1 -2]) [[-1 0 -2] [3] [3 -1 -2]])))
 
+(deftest test-ranges-domain
+  (let [_ @load-native
+        model (CpModel.)]
+    ;; flat pairs: value 0 or 10-20
+    (let [dm (mk-domain-map model {"w" [:ranges 0 0 10 20]})
+          v  (get dm "w")]
+      (is (= 0 (.min (.getDomain v))))
+      (is (= 20 (.max (.getDomain v)))))
+    ;; nested pairs: same domain
+    (let [dm (mk-domain-map model {"v" [:ranges [0 0] [10 20]]})
+          v  (get dm "v")]
+      (is (= 0 (.min (.getDomain v))))
+      (is (= 20 (.max (.getDomain v))))))
+  ;; solve: x must be in [1,3] or [7,9], x >= 6 → x in {7,8,9}
+  (is (#{7 8 9}
+       (-> (solve-with-1-worker {"x" [:ranges 1 3 7 9]}
+                                [[">=" ["x"] [6]]])
+           (get "x"))))
+  ;; solve with nested pairs
+  (is (#{7 8 9}
+       (-> (solve-with-1-worker {"x" [:ranges [1 3] [7 9]]}
+                                [[">=" ["x"] [6]]])
+           (get "x")))))
+
 (deftest test-solve-equations
   (is (#{11 12 13}
        (-> (solve-with-1-worker {"a" [:range 10 15]}
@@ -182,16 +206,16 @@
 
   ;; >=
   (are [domain-b eqs expected]
-    (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
-       expected)
+       (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
+          expected)
     [11 12] [[">=" ["a"] ["b"]]] 11
     [11] [[">=" ["a"] [7]]] 10                              ; b can be any domain w/ 1 option (just to fulfill mk-domain-map
     [11] [[">=" [10] ["a"]]] 10)
 
   ;; >
   (are [domain-b eqs expected]
-    (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
-       expected)
+       (= (-> (solve-with-1-worker {"a" [10 11] "b" domain-b} eqs) (get "a"))
+          expected)
     [11 12] [[">" ["a"] ["b"]]] nil
     [10 11 12] [[">" ["a"] ["b"]]] 11
     [11] [[">" ["a"] [10]]] 11
@@ -360,12 +384,12 @@
                 "x3int"     [:optional-fixed-size-interval "x3" "prsnt" 2]
                 "y3int"     [:optional-fixed-size-interval "y3" "prsnt" 2]}
         result (sort
-                 (map (fn [{:strs [x2 y2 x3 y3]}] [x2 y2 x3 y3])
-                      (solve-equations domain
-                                       [["no-overlap-2d" [["x1int" "y1int"] ["x2int" "y2int"] ["x3int" "y3int"]]]
-                                        ["=" ["prsnt"] [1]]
-                                        ["=" ["not-prsnt"] [0]]]
-                                       {:enumerate-all true})))]
+                (map (fn [{:strs [x2 y2 x3 y3]}] [x2 y2 x3 y3])
+                     (solve-equations domain
+                                      [["no-overlap-2d" [["x1int" "y1int"] ["x2int" "y2int"] ["x3int" "y3int"]]]
+                                       ["=" ["prsnt"] [1]]
+                                       ["=" ["not-prsnt"] [0]]]
+                                      {:enumerate-all true})))]
     ;; (1) is fixed at [0, 0], (2) is free b/c it's constraints are "not present", and (3) can not overlap (1)
     (is (= result [[0 0 2 0]
                    [1 0 2 0]
@@ -377,11 +401,11 @@
         domain {["x1" "y1"] [:tuples allowed-wh]
                 ["x2" "y2"] [:tuples allowed-wh]}
         result (sort
-                 (map (fn [{:strs [x1 y1 x2 y2]}] [x1 y1 x2 y2])
-                      (solve-equations domain
-                                       [["<=" ["y1"] ["y2"]]
-                                        [">=" ["x1"] [5]]
-                                        [">=" ["x2"] [1]]]
-                                       {:enumerate-all true})))]
+                (map (fn [{:strs [x1 y1 x2 y2]}] [x1 y1 x2 y2])
+                     (solve-equations domain
+                                      [["<=" ["y1"] ["y2"]]
+                                       [">=" ["x1"] [5]]
+                                       [">=" ["x2"] [1]]]
+                                      {:enumerate-all true})))]
     (is (= result [[10 20 3 21]
                    [10 20 10 20]]))))

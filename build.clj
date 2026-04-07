@@ -2,7 +2,7 @@
   (:require [clojure.tools.build.api :as b]))
 
 (def lib 'io.github.mlimotte/quandary)
-(def version "0.9.0")
+(def version "0.9.1")
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
 (def lib-jar-file (format "target/%s-%s.jar" (name lib) version))

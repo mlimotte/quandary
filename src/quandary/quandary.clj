@@ -98,6 +98,16 @@
                                                          :v0type  (-> values_ first type)})))]
     (Domain/fromValues (into-array typ values_))))
 
+(defn domain-from-ranges
+  "Creates an OR-Tools `Domain` from multiple intervals. Accepts either flat pairs
+  (min1 max1 min2 max2 ...) or nested pairs ([min1 max1] [min2 max2] ...)."
+  [intervals]
+  (let [pairs (if (sequential? (first intervals))
+                intervals
+                (partition 2 intervals))]
+    (Domain/fromFlatIntervals
+     (long-array (mapcat (fn [[lo hi]] [lo hi]) pairs)))))
+
 (defn strip-temp-vars
   "Remove map entries where the key starts with \"TEMP.\".
    Works on a map or a seq of maps."
@@ -281,10 +291,13 @@
   "Given a model and a domain spec, create the domain variables in the model and return a
   same-shaped map of Vars.
   A domain spec looks like this, for example:
-    {\"x\" [:range 0 20]
+    {\"w\" [:ranges 0 0 10 20]
+     \"v\" [:ranges [0 0] [10 20]]
+     \"x\" [:range 0 20]
      \"y\" [:boolean]
      \"z\" [9 10 11 12 13]}
-  In the `:range` case, the second value is inclusive."
+  In the `:range` case, the second value is inclusive.
+  `:ranges` accepts flat pairs or nested pairs for multiple disjoint intervals."
   [model m]
   (let [kvs (doall
              (mapcat
@@ -324,6 +337,9 @@
 
                            (= (first domain-spec) :range)
                            (.newIntVar model (nth domain-spec 1) (nth domain-spec 2) varname-or-names)
+
+                           (= (first domain-spec) :ranges)
+                           (.newIntVarFromDomain model (domain-from-ranges (rest domain-spec)) varname-or-names)
 
                            (= (first domain-spec) :fixed-size-interval)
                            (fn [processed-domain-map]
